@@ -1,0 +1,6 @@
+@EColor.API_HostAddress = http://localhost:5204
+
+GET {{EColor.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
