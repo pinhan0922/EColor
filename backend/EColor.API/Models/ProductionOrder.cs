@@ -8,13 +8,14 @@ namespace EColor.API.Models
         [Key]
         public int Id { get; set; }
 
-        [Required]
         [MaxLength(50)]
         public string OrderNo { get; set; } = string.Empty;
-
+ 
+        [Required]
         [MaxLength(100)]
         public string Vendor { get; set; } = string.Empty;
-
+ 
+        [Required]
         [MaxLength(50)]
         public string OrderDate { get; set; } = string.Empty;
 

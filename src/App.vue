@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import OrderEntry from './components/OrderEntry.vue'
 import SearchOrder from './components/SearchOrder.vue'
 import InputCheck from './components/InputCheck.vue'
@@ -9,8 +9,8 @@ import OutputPacking from './components/OutputPacking.vue'
 const currentTab = ref('searchOrder')
 
 const tabs = [
-  { id: 'searchOrder', name: '歷程查詢', icon: '🔎', component: SearchOrder },
-  { id: 'orderEntry', name: '生產單建立', icon: '📝', component: OrderEntry }
+  { id: 'searchOrder', name: '歷程查詢', icon: '🗂️', component: SearchOrder },
+  { id: 'orderEntry', name: '生產單建立', icon: '✏️', component: OrderEntry }
 ]
 
 const currentComponent = computed(() => {
@@ -18,7 +18,6 @@ const currentComponent = computed(() => {
   return tab ? tab.component : null
 })
 
-// 增加一個隨機 Key，當點擊「生產單建立」時強制重新渲染該組件以清空欄位
 const orderEntryKey = ref(0)
 const handleTabClick = (tabId) => {
   if (tabId === 'orderEntry') {
@@ -26,17 +25,42 @@ const handleTabClick = (tabId) => {
   }
   currentTab.value = tabId
 }
+
+// 主題切換邏輯
+const themes = [
+  { name: '深青色', color: '#0d9488', bg: 'rgba(13, 148, 136, 0.08)', appBg: '#f0fdfa' },
+  { name: '落日橘', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.08)', appBg: '#fff7ed' },
+  { name: '午夜紫', color: '#7c3aed', bg: 'rgba(124, 58, 237, 0.08)', appBg: '#f5f3ff' },
+  { name: '翡翠綠', color: '#059669', bg: 'rgba(5, 150, 105, 0.08)', appBg: '#ecfdf5' },
+  { name: '經典藍', color: '#2563eb', bg: 'rgba(37, 99, 235, 0.08)', appBg: '#eff6ff' }
+]
+const currentThemeIndex = ref(0)
+
+const applyTheme = () => {
+  const theme = themes[currentThemeIndex.value]
+  document.documentElement.style.setProperty('--theme-color', theme.color)
+  document.documentElement.style.setProperty('--theme-bg', theme.bg)
+  document.documentElement.style.setProperty('--app-bg', theme.appBg)
+  // 同步更新 OrderEntry 中使用的 --accent-color 以維持整體一致性
+  document.documentElement.style.setProperty('--accent-color', theme.color)
+}
+
+const nextTheme = () => {
+  currentThemeIndex.value = (currentThemeIndex.value + 1) % themes.length
+  applyTheme()
+}
+
+onMounted(() => {
+  applyTheme()
+})
 </script>
 
 <template>
   <div class="app-wrapper">
-    <!-- Main Header -->
-    <header class="main-header no-print">
-      <div class="header-content">
-        <h1 class="logo-text">Stitch Flow <span>Production Management</span></h1>
-      </div>
-    </header>
-
+    <!-- Theme Switcher (Top Right) -->
+    <button class="theme-switcher no-print" @click="nextTheme" :title="'切換主題 (' + themes[currentThemeIndex].name + ')'">
+      🎨
+    </button>
     <!-- Content Container -->
     <div class="content-viewport">
       <transition name="fade" mode="out-in">
@@ -73,39 +97,10 @@ const handleTabClick = (tabId) => {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background-color: #f8fafc;
+  background-color: var(--app-bg, #f8fafc);
+  transition: background-color 0.4s ease;
 }
 
-.main-header {
-  background-color: #1e293b;
-  color: white;
-  padding: 0.85rem 1rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.logo-text {
-  font-size: 1.15rem;
-  font-weight: 900;
-  margin: 0;
-  text-align: left;
-  letter-spacing: 0.05rem;
-}
-
-.logo-text span {
-  font-weight: 300;
-  font-size: 0.8rem;
-  opacity: 0.7;
-  margin-left: 0.5rem;
-  text-transform: uppercase;
-}
 
 .content-viewport {
   flex: 1;
@@ -154,8 +149,8 @@ const handleTabClick = (tabId) => {
 }
 
 .nav-item.active {
-  color: #2563eb;
-  background-color: rgba(37, 99, 235, 0.04);
+  color: var(--theme-color, #0d9488);
+  background-color: var(--theme-bg, rgba(13, 148, 136, 0.08));
 }
 
 .nav-item.active .nav-icon {
@@ -179,6 +174,30 @@ const handleTabClick = (tabId) => {
 @media print {
   .no-print { display: none !important; }
   .content-viewport { padding: 0 !important; margin: 0 !important; max-width: none !important; }
+}
+
+.theme-switcher {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  z-index: 1000;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.theme-switcher:hover {
+  transform: scale(1.1) rotate(15deg);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
 }
 
 @media (min-width: 768px) {
