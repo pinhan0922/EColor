@@ -2,6 +2,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { toPng } from 'html-to-image'
 import draggable from 'vuedraggable'
+import Multiselect from '@vueform/multiselect'
+import '@vueform/multiselect/themes/default.css'
 
 const props = defineProps({
   initialData: { type: Object, default: null },
@@ -24,14 +26,47 @@ const formData = ref({
   notes: ''
 })
 
+const fabricOptions = [
+  '1-M+T高爾布',
+  '2-C+T高爾布',
+  '3-超新吸排高爾布',
+  '4-細針雙面排汗布',
+  '5-壓花排汗組織布',
+  '6-階梯排汗組織布',
+  '7-C+T組織布',
+  '8-M+T組織布',
+  '9-細針橫條組織布'
+]
+
+const compositionOptions = [
+  'POLYESTER 100%',
+  'POLYESTER 70% / COTTON 30%'
+]
+
 // Image Load Error Handling
 const maleImgValid = ref(true)
 const femaleImgValid = ref(true)
 const detailImgValid = ref(true)
 
-const getMaleImgUrl = computed(() => formData.value.maleStyleNo ? `/styles/${formData.value.maleStyleNo}.jpg` : null)
-const getFemaleImgUrl = computed(() => formData.value.femaleStyleNo ? `/styles/${formData.value.femaleStyleNo}.jpg` : null)
-const getDetailImgUrl = computed(() => formData.value.detailStyleNo ? `/styles/${formData.value.detailStyleNo}.jpg` : null)
+const getMaleImgUrl = computed(() => {
+  const val = formData.value.maleStyleNo?.trim()
+  return val ? `/styles/${val}.jpg` : null
+})
+const getFemaleImgUrl = computed(() => {
+  const val = formData.value.femaleStyleNo?.trim()
+  return val ? `/styles/${val}.jpg` : null
+})
+const getDetailImgUrl = computed(() => {
+  const val = formData.value.detailStyleNo?.trim()
+  return val ? `/styles/${val}.jpg` : null
+})
+
+// Dynamically load image names from public/styles for the datalist
+const imagePaths = Object.keys(import.meta.glob('/public/styles/*.{jpg,jpeg,png,JPG,JPEG,PNG}'))
+const styleOptions = ref(imagePaths.map(path => {
+  const filename = path.split('/').pop()
+  return filename.substring(0, filename.lastIndexOf('.'))
+}))
 
 const handleImgError = (type) => {
   if (type === 'male') maleImgValid.value = false
@@ -215,9 +250,7 @@ const saveToDatabase = async () => {
   // 1. 必填欄位驗證
   const requiredFields = [
     { label: '廠商', value: formData.value.vendor },
-    { label: '訂購日期', value: formData.value.orderDate },
-    { label: '單號 (流水號)', value: formOrderId.value },
-    { label: '交貨日期', value: formData.value.deliveryDate }
+    { label: '訂購日期', value: formData.value.orderDate }
   ]
 
   const missingFields = requiredFields.filter(f => !f.value || f.value.trim() === '')
@@ -269,9 +302,9 @@ const printDocument = () => window.print()
     <!-- Size Management (UI Only) - Hidden if Readonly -->
     <div v-if="!readonly" class="size-controls no-print mb-4 shadow-sm">
       <h3 class="text-left text-blue mb-3">尺寸管理與排序</h3>
-      <div class="flex-row gap-3 mb-3">
+      <div class="add-size-container mb-3">
         <input type="text" v-model="newSizeLabel" placeholder="輸入尺寸" class="form-input size-input-tool" @keyup.enter="addSize" />
-        <button class="btn btn-primary btn-sm" @click="addSize">新增</button>
+        <button class="btn btn-primary btn-sm add-size-btn" @click="addSize">新增</button>
       </div>
       <draggable v-model="sizes" item-key="index" class="size-drag-list" handle=".drag-handle">
         <template #item="{ element, index }">
@@ -291,58 +324,125 @@ const printDocument = () => window.print()
       <h1 class="document-title">生 產 單</h1>
 
       <!-- Main Upper Layout: Left Sidebar (Inputs) | Right Content (Display) -->
-      <div class="main-doc-upper">
-        
-        <!-- Left Column (1/3): Inputs + Detail Photo -->
-        <div class="left-field-column">
-          <div class="fields-area mb-3">
-            <div class="field-item"><label>廠商 <span class="text-red">*</span>：</label><input type="text" v-model="formData.vendor" class="border-bottom" :disabled="readonly" /></div>
-            <div class="field-item"><label>訂購日期 <span class="text-red">*</span>：</label><input type="date" v-model="formData.orderDate" class="border-bottom date-input" :disabled="readonly" /></div>
-            <div class="field-item"><label>布種：</label><input type="text" v-model="formData.fabricType" class="border-bottom" :disabled="readonly" /></div>
-            <div class="field-item">
-              <label>單號 <span class="text-red">*</span>：</label>
-              <div class="split-input-wrapper">
-                <input type="text" v-model="formOrderYear" class="border-bottom bold year-input" :disabled="readonly" />
-                <span class="hyphen">-</span>
-                <input type="text" v-model="formOrderId" class="border-bottom bold id-input" placeholder="輸入單號..." :disabled="readonly" />
-              </div>
+      <!-- Option A Layout: Top Fields (2-column), Middle Notes, Bottom Images -->
+      <div class="main-doc-layout-a">
+        <!-- Top: 2-Column Form Fields -->
+        <div class="fields-two-column-area mb-3">
+          <div class="field-item"><label>廠商 <span class="text-red">*</span>：</label><input type="text" v-model="formData.vendor" class="border-bottom" :disabled="readonly" required /></div>
+          <div class="field-item">
+            <label>訂購日期 <span class="text-red">*</span>：</label>
+            <div class="date-print-wrapper">
+              <input type="date" v-model="formData.orderDate" class="border-bottom date-input no-print" :disabled="readonly" required />
+              <span class="print-only date-print-value">{{ formData.orderDate || '' }}</span>
             </div>
-            <div class="field-item"><label>男款型號：</label><input type="text" v-model="formData.maleStyleNo" class="border-bottom bold" placeholder="輸入型號..." :disabled="readonly" /></div>
-            <div class="field-item"><label>女款型號：</label><input type="text" v-model="formData.femaleStyleNo" class="border-bottom bold" placeholder="輸入型號..." :disabled="readonly" /></div>
-            <div class="field-item"><label>細節圖型號：</label><input type="text" v-model="formData.detailStyleNo" class="border-bottom bold" placeholder="輸入細節型號..." :disabled="readonly" /></div>
-            <div class="field-item"><label class="text-red">交貨日期 *：</label><input type="date" v-model="formData.deliveryDate" class="border-bottom border-red text-red date-input" :disabled="readonly" /></div>
-            <div class="field-item"><label>線號：</label><input type="text" v-model="formData.threadCode" class="border-bottom" :disabled="readonly" /></div>
-            <div class="field-item"><label>成分/標示：</label><input type="text" v-model="formData.composition" class="border-bottom" :disabled="readonly" /></div>
-            <div class="field-item"><label>裁剪日期：</label><input type="date" v-model="formData.cuttingDate" class="border-bottom date-input" :disabled="readonly" /></div>
           </div>
-          <!-- Detail Photo Moved Here -->
-          <div class="photo-box-doc detail-photo-left">
-            <div v-if="!getDetailImgUrl || !detailImgValid" class="photo-placeholder"><span>細節圖型號<br>{{ formData.detailStyleNo || '未填寫' }}</span></div>
-            <img v-else :src="getDetailImgUrl" class="doc-img-fill" @error="handleImgError('detail')" />
+          <div class="field-item">
+            <label>單號 <span class="text-red">*</span>：</label>
+            <div class="split-input-wrapper">
+              <input type="text" v-model="formOrderYear" class="border-bottom bold year-input no-print" :disabled="readonly" />
+              <span class="print-only bold year-input border-bottom print-inline">{{ formOrderYear }}</span>
+              <span class="hyphen">-</span>
+              <input type="text" v-model="formOrderId" class="border-bottom bold id-input no-print" placeholder="輸入單號..." :disabled="readonly" required />
+              <span class="print-only bold id-input border-bottom print-inline">{{ formOrderId }}</span>
+            </div>
+          </div>
+          <div class="field-item">
+            <label>布種：</label>
+            <Multiselect
+              v-model="formData.fabricType"
+              :options="fabricOptions"
+              :searchable="true"
+              :create-option="true"
+              placeholder="選擇或輸入布種..."
+              :disabled="readonly"
+              class="custom-multiselect"
+            />
+          </div>
+          <div class="field-item">
+            <label>男款型號：</label>
+            <Multiselect
+              v-model="formData.maleStyleNo"
+              :options="styleOptions"
+              :searchable="true"
+              :create-option="true"
+              placeholder="輸入型號..."
+              :disabled="readonly"
+              class="custom-multiselect bold-multiselect"
+            />
+          </div>
+          <div class="field-item">
+            <label>女款型號：</label>
+            <Multiselect
+              v-model="formData.femaleStyleNo"
+              :options="styleOptions"
+              :searchable="true"
+              :create-option="true"
+              placeholder="輸入型號..."
+              :disabled="readonly"
+              class="custom-multiselect bold-multiselect"
+            />
+          </div>
+          <div class="field-item">
+            <label>交貨日期：</label>
+            <div class="date-print-wrapper">
+              <input type="date" v-model="formData.deliveryDate" class="border-bottom date-input no-print" :disabled="readonly" />
+              <span class="print-only date-print-value">{{ formData.deliveryDate || '' }}</span>
+            </div>
+          </div>
+          <div class="field-item">
+            <label>裁剪日期：</label>
+            <div class="date-print-wrapper">
+              <input type="date" v-model="formData.cuttingDate" class="border-bottom date-input no-print" :disabled="readonly" />
+              <span class="print-only date-print-value">{{ formData.cuttingDate || '' }}</span>
+            </div>
+          </div>
+          <div class="field-item"><label>線號：</label><input type="text" v-model="formData.threadCode" class="border-bottom" :disabled="readonly" /></div>
+          <div class="field-item">
+            <label>細節圖型號：</label>
+            <Multiselect
+              v-model="formData.detailStyleNo"
+              :options="styleOptions"
+              :searchable="true"
+              :create-option="true"
+              placeholder="輸入細節型號..."
+              :disabled="readonly"
+              class="custom-multiselect bold-multiselect"
+            />
+          </div>
+          <div class="field-item span-2">
+            <label>成分/標示：</label>
+            <Multiselect
+              v-model="formData.composition"
+              :options="compositionOptions"
+              :searchable="true"
+              :create-option="true"
+              placeholder="選擇或輸入成分..."
+              :disabled="readonly"
+              class="custom-multiselect"
+            />
           </div>
         </div>
 
-        <!-- Right Column (2/3): Photos Top | Notes Full Width Bottom -->
-        <div class="right-display-column">
-          
-          <!-- Top Part (Style Images) -->
-          <div class="photos-upper-row">
-            <div class="photo-box-doc">
-              <div v-if="!getMaleImgUrl || !maleImgValid" class="photo-placeholder"><span>男款型號<br>{{ formData.maleStyleNo || '未填寫' }}</span></div>
-              <img v-else :src="getMaleImgUrl" class="doc-img-fill" @error="handleImgError('male')" />
-            </div>
-            <div class="photo-box-doc">
-              <div v-if="!getFemaleImgUrl || !femaleImgValid" class="photo-placeholder"><span>女款型號<br>{{ formData.femaleStyleNo || '未填寫' }}</span></div>
-              <img v-else :src="getFemaleImgUrl" class="doc-img-fill" @error="handleImgError('female')" />
-            </div>
-          </div>
+        <!-- Middle: Notes -->
+        <div class="notes-box-doc notes-horizontal-wide mb-3">
+          <div class="notes-label-internal text-red">注意事項：</div>
+          <textarea v-model="formData.notes" class="notes-textarea-internal" placeholder="補充說明..." :disabled="readonly"></textarea>
+        </div>
 
-          <!-- Bottom Part (Wider Notes) -->
-          <div class="notes-box-doc full-width-notes">
-            <div class="notes-label-internal text-red">注意事項：</div>
-            <textarea v-model="formData.notes" class="notes-textarea-internal" placeholder="補充說明..." :disabled="readonly"></textarea>
+        <!-- Bottom: 3 Images Side-by-Side -->
+        <div class="photos-three-row mb-3">
+          <div class="photo-box-doc">
+            <div v-if="!getMaleImgUrl || !maleImgValid" class="photo-placeholder"><span>男款型號<br>{{ formData.maleStyleNo || '未填寫' }}</span></div>
+            <img v-else :src="getMaleImgUrl" class="doc-img-fill" @error="handleImgError('male')" />
           </div>
-
+          <div class="photo-box-doc">
+            <div v-if="!getFemaleImgUrl || !femaleImgValid" class="photo-placeholder"><span>女款型號<br>{{ formData.femaleStyleNo || '未填寫' }}</span></div>
+            <img v-else :src="getFemaleImgUrl" class="doc-img-fill" @error="handleImgError('female')" />
+          </div>
+          <div class="photo-box-doc">
+            <div v-if="!getDetailImgUrl || !detailImgValid" class="photo-placeholder"><span>細節圖型號<br>{{ formData.detailStyleNo || '未填寫' }}</span></div>
+            <img v-else :src="getDetailImgUrl" class="doc-img-fill" @error="handleImgError('detail')" />
+          </div>
         </div>
       </div>
 
@@ -405,42 +505,91 @@ const printDocument = () => window.print()
 
 <style scoped>
 .production-wrapper { padding-bottom: 2rem; }
-.production-form { background: white; padding: 1.5rem; border: 2px solid #000; color: #000; width: 100%; max-width: 100%; border-radius: 2px; }
+.production-form { background: white; padding: 1.5rem; border: 2px solid #000; color: #000; width: 100%; max-width: 100%; border-radius: 2px; font-family: "標楷體", "DFKai-SB", "BiauKai", serif; display: flex; flex-direction: column; min-height: 297mm; }
 .document-title { font-size: 2.2rem; font-weight: 900; letter-spacing: 0.8rem; margin-bottom: 1.5rem; border-bottom: 2.5px solid #000; padding-bottom: 0.5rem; }
 
-/* Main layout: 1/3 Left, 2/3 Right */
-.main-doc-upper { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: stretch; }
+/* Option A Layout Styles */
+.main-doc-layout-a { display: flex; flex-direction: column; width: 100%; margin-bottom: 1rem; }
 
-/* Left Column (1/3) */
-.left-field-column { flex: 1; display: flex; flex-direction: column; border-right: 1px solid #ccc; padding-right: 1rem; text-align: left; }
-.fields-area { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; justify-content: flex-start; }
-.field-item { display: flex; align-items: baseline; justify-content: space-between; }
+/* Top: 2-Column Fields */
+.fields-two-column-area { display: grid; grid-template-columns: 1fr 1fr; column-gap: 2rem; row-gap: 1.25rem; text-align: left; }
+.field-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0; }
 .field-item label { font-weight: 800; white-space: nowrap; font-size: 1.1rem; flex: 0 0 110px; }
-.border-bottom { border: none; border-bottom: 1.5px solid #000; padding: 4px; width: 100%; font-size: 1.25rem; font-weight: 500; background: transparent; }
+.span-2 { grid-column: span 2; }
+.border-bottom { border: none; border-bottom: 1.5px solid #000; padding: 4px 4px 8px 4px; width: 100%; font-size: 1.25rem; font-weight: 500; background: transparent; }
 .border-red { border-bottom-color: #dc2626; }
 .bold { font-weight: 900; font-size: 1.3rem; }
+
+/* Custom Multiselect styles to match border-bottom */
+.custom-multiselect {
+  --ms-bg: transparent;
+  --ms-border-color: transparent;
+  --ms-border-width: 0 0 1.5px 0;
+  --ms-border-color-active: #000;
+  --ms-radius: 0;
+  --ms-ring-width: 0;
+  --ms-font-size: 1.25rem;
+  --ms-py: 4px;
+  --ms-px: 4px;
+  --ms-option-font-size: 1.1rem;
+  --ms-caret-color: #000;
+  --ms-clear-color: #000;
+  --ms-dropdown-border-color: #ccc;
+  --ms-dropdown-radius: 4px;
+  flex: 1;
+  min-height: auto;
+  border-bottom: 1.5px solid #000 !important;
+  padding-bottom: 4px;
+}
+.custom-multiselect .multiselect-single {
+  font-weight: 500;
+}
+.bold-multiselect {
+  --ms-font-size: 1.3rem;
+}
+.bold-multiselect .multiselect-single {
+  font-weight: 900;
+}
+.custom-multiselect.is-active {
+  box-shadow: none;
+  border-bottom-color: var(--accent-color, #3b82f6) !important;
+}
+
+/* Multiselect Icon Spacing and Hover */
+.custom-multiselect :deep(.multiselect-clear) { margin-right: 16px; border-radius: 6px; transition: all 0.2s; padding: 4px; }
+.custom-multiselect :deep(.multiselect-caret) { border-radius: 6px; transition: all 0.2s; padding: 4px; }
+.custom-multiselect :deep(.multiselect-clear:hover),
+.custom-multiselect :deep(.multiselect-caret:hover) { background-color: #e2e8f0; color: #2563eb; transform: scale(1.15); }
+
+/* Date Picker Icon Spacing and Hover */
+input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; padding: 6px; border-radius: 6px; margin-left: 12px; transition: all 0.2s; }
+input[type="date"]::-webkit-calendar-picker-indicator:hover { background-color: #e2e8f0; transform: scale(1.15); }
 
 .split-input-wrapper { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
 .year-input { flex: 0 0 75px; text-align: center; }
 .id-input { flex: 1; }
 .hyphen { font-size: 1.5rem; font-weight: 900; }
+.print-inline { display: inline-block; text-align: center; }
 .date-input { font-family: inherit; } /* 使日期選擇器字體一致 */
 
-.detail-photo-left { height: 400px; margin-top: 1.5rem; }
+.date-print-wrapper { position: relative; width: 100%; display: flex; align-items: center; }
+.print-only { display: none; }
+@media print {
+  .print-only { display: inline-block; }
+  .no-print { display: none !important; }
+}
+.date-print-value { width: 100%; border-bottom: 1.5px solid #000; padding: 4px; font-size: 1.25rem; min-height: 1.5rem; text-align: left; }
 
-/* Right Column (2/3) */
-.right-display-column { flex: 2; display: flex; flex-direction: column; gap: 1rem; }
+/* Middle: Notes */
+.notes-horizontal-wide { margin-top: 1.5rem; margin-bottom: 1.5rem; height: 180px; width: 100%; display: flex; flex-direction: column; border: 2px solid #000; padding: 0.5rem 1rem; text-align: left; }
+.notes-label-internal { font-size: 1.1rem; font-weight: 800; margin-bottom: 0.25rem; border-bottom: 1px dashed #ccc; }
+.notes-textarea-internal { width: 100%; flex: 1; border: none; padding: 0.5rem 0; font-size: 1.1rem; line-height: 1.6; resize: none; font-family: inherit; background: transparent; outline: none; overflow: hidden; }
 
-/* Upper photos */
-.photos-upper-row { display: flex; gap: 1rem; flex: 1; min-height: 380px; }
-.photo-box-doc { border: 2px solid #000; flex: 1; background-color: #fdfdfd; display: flex; overflow: hidden; align-items: center; justify-content: center; position: relative; }
+/* Bottom: 3 Images Row */
+.photos-three-row { display: flex; gap: 1rem; width: 100%; min-height: 250px; }
+.photo-box-doc { border: 2px solid #000; flex: 1; background-color: #fdfdfd; display: flex; overflow: hidden; align-items: center; justify-content: center; position: relative; aspect-ratio: 3 / 4; }
 .photo-placeholder { color: #64748b; text-align: center; font-size: 0.85rem; font-weight: 600; line-height: 1.4; padding: 1rem; }
 .doc-img-fill { width: 100%; height: 100%; object-fit: contain; }
-
-/* Lower wider notes */
-.full-width-notes { height: 400px; width: 100%; display: flex; flex-direction: column; border: 2px solid #000; padding: 0.5rem 1rem; text-align: left; }
-.notes-label-internal { font-size: 1.1rem; font-weight: 800; margin-bottom: 0.25rem; border-bottom: 1px dashed #ccc; }
-.notes-textarea-internal { width: 100%; flex: 1; border: none; padding: 0.5rem 0; font-size: 1.1rem; line-height: 1.6; resize: none; font-family: inherit; background: transparent; outline: none; }
 
 /* Quantity Table */
 .quantity-table-full { margin-top: 1rem; width: 100%; }
@@ -459,35 +608,58 @@ const printDocument = () => window.print()
 @media print {
   @page { size: A4 portrait; margin: 8mm; }
   
+  .production-wrapper { padding-bottom: 0 !important; }
+  
   .production-form { 
-    padding: 10px !important; 
-    border: none !important; /* 如果不想印最外框可拿掉，或保留 border: 2px solid #000; */
+    padding: 5px !important; 
+    border: none !important; 
+    display: flex !important;
+    flex-direction: column !important;
+    height: 280mm !important;
+    max-height: 280mm !important;
+    overflow: hidden !important;
   }
   
-  .document-title { font-size: 1.8rem !important; margin-bottom: 15px !important; letter-spacing: 0.5rem !important; }
+  .document-title { font-size: 1.8rem !important; margin-bottom: 5mm !important; padding-bottom: 0 !important; letter-spacing: 0.5rem !important; }
   
-  .main-doc-upper { gap: 5mm !important; margin-bottom: 5mm !important; }
-  .left-field-column { flex: 0 0 70mm !important; padding-right: 5mm !important; }
+  .main-doc-layout-a { margin-bottom: 2mm !important; flex: 1 !important; display: flex !important; flex-direction: column !important; }
   
-  /* 大幅降低輸入框與欄位間距 */
-  .fields-area { gap: 0.1rem !important; }
-  .field-item label { font-size: 1rem !important; }
-  .border-bottom { font-size: 1.1rem !important; padding: 0px 2px !important; }
+  /* 兩欄表單間距放寬與字體放大 */
+  .fields-two-column-area { row-gap: 0.5rem !important; column-gap: 5mm !important; margin-bottom: 4mm !important; }
+  .field-item label { font-size: 1.25rem !important; flex: 0 0 100px !important; }
+  .border-bottom { font-size: 1.25rem !important; padding: 0 0 2px 0 !important; border-bottom-width: 1px !important; min-height: 26px !important; line-height: 1.3 !important; }
+  .custom-multiselect { padding-bottom: 2px !important; --ms-py: 2px !important; --ms-font-size: 1.25rem !important; min-height: 26px !important; }
+  .custom-multiselect :deep(.multiselect-single) { font-size: 1.25rem !important; line-height: 1.3 !important; }
   
-  /* 嚴格限制圖片跟備註的高度，強迫擠在 A4 範圍內 */
-  .photos-upper-row { height: 180px !important; min-height: 180px !important; gap: 5mm !important; }
-  .detail-photo-left { height: 160px !important; margin-top: 10px !important; }
-  .full-width-notes { height: 140px !important; padding: 5px !important; }
-  .notes-textarea-internal { font-size: 1rem !important; }
+  /* 注意事項自動彈性撐滿剩餘空間 */
+  .notes-horizontal-wide { flex: 1 !important; height: auto !important; padding: 5px !important; margin-top: 2mm !important; margin-bottom: 2mm !important; }
+  .notes-textarea-internal { font-size: 1.2rem !important; padding: 0 !important; }
   
-  /* 縮減表格的高度 */
-  .quantity-table-full { margin-top: 5mm !important; }
-  .doc-table-large td { height: 32px !important; padding: 0 !important; }
-  .table-qty-input-large { font-size: 1rem !important; padding: 0 !important; height: 32px !important; }
-  .total-qty-cell-large { font-size: 1.1rem !important; height: 32px !important; }
+  /* 圖片區塊 */
+  .photos-three-row { gap: 5mm !important; margin-bottom: 2mm !important; }
+  .photo-box-doc { height: auto !important; aspect-ratio: 3 / 4 !important; border-width: 1px !important; }
+  
+  /* 表格高度與框線縮減 */
+  .quantity-table-full { margin-top: 2mm !important; padding-top: 0 !important; }
+  .doc-table-large { border-width: 1.5px !important; }
+  .doc-table-large th { padding: 4px 2px !important; }
+  .doc-table-large td { height: 26px !important; padding: 0 !important; border-width: 1px !important; }
+  .table-qty-input-large { font-size: 1rem !important; padding: 0 !important; height: 26px !important; }
+  .total-qty-cell-large { font-size: 1.1rem !important; height: 26px !important; }
   
   /* 隱藏不需要的互動元素 */
   .no-print, .sticky-actions, .size-close-icon { display: none !important; }
+  
+  /* 隱藏佔位符與圖示 */
+  ::placeholder { color: transparent !important; }
+  ::-webkit-input-placeholder { color: transparent !important; }
+  :-moz-placeholder { color: transparent !important; }
+  ::-moz-placeholder { color: transparent !important; }
+  :-ms-input-placeholder { color: transparent !important; }
+  
+  :deep(.multiselect-placeholder) { display: none !important; }
+  :deep(.multiselect-clear), :deep(.multiselect-caret) { display: none !important; }
+  input[type="date"]::-webkit-calendar-picker-indicator { display: none !important; }
 }
 
 .size-controls { padding: 1.5rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 2rem; }
@@ -509,6 +681,39 @@ const printDocument = () => window.print()
 }
 .size-text { font-weight: 900; color: var(--accent-color); font-size: 1.15rem; }
 .doc-actions { display: flex; justify-content: center; gap: 1rem; padding: 1rem; }
-.db-save-btn { background-color: #059669; border-color: #047857; min-width: 160px; }
-.db-save-btn:hover { background-color: #047857; }
+.db-save-btn { background-color: var(--accent-color, #059669); border-color: var(--accent-color, #059669); min-width: 160px; color: white; }
+.db-save-btn:hover { filter: brightness(0.9); }
+
+/* 新增尺寸的左右間隔容器 */
+.add-size-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.size-input-tool {
+  flex: 1;
+  max-width: 250px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 1.05rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.size-input-tool:focus {
+  border-color: var(--accent-color, #3b82f6);
+}
+.add-size-btn {
+  padding: 0.5rem 1.25rem;
+  font-weight: 700;
+  border-radius: 6px;
+  background-color: var(--accent-color, #0ea5e9);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: filter 0.2s;
+}
+.add-size-btn:hover {
+  filter: brightness(0.9);
+}
 </style>
